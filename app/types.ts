@@ -7,6 +7,7 @@ export interface DailyProgress {
     transcript?: string;
     topic?: string;
     date: string; // ISO string
+    videoPath?: string;
 }
 
 export interface UserState {

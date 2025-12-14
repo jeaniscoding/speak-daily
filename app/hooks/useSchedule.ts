@@ -3,8 +3,6 @@
 import { useState, useEffect } from 'react';
 import { UserState, DailyProgress, SCHEDULE_CONFIG, Difficulty } from '../types';
 
-const STORAGE_KEY = 'speak_daily_progress';
-
 const INITIAL_STATE: UserState = {
     currentDay: 1,
     history: [],
@@ -16,20 +14,34 @@ export function useSchedule() {
     const [isLoaded, setIsLoaded] = useState(false);
 
     useEffect(() => {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-            try {
-                setState(JSON.parse(saved));
-            } catch (e) {
-                console.error('Failed to parse progress', e);
-            }
-        }
-        setIsLoaded(true);
+        fetchProgress();
     }, []);
 
-    const saveState = (newState: UserState) => {
-        setState(newState);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
+    const fetchProgress = async () => {
+        try {
+            const res = await fetch('/api/progress');
+            if (res.ok) {
+                const history: DailyProgress[] = await res.json();
+                // Determine current day based on history
+                // If no history, day 1. If history, last completed day + 1.
+                // Assuming history is sorted by day.
+                let nextDay = 1;
+                if (history.length > 0) {
+                    const lastEntry = history[history.length - 1];
+                    nextDay = lastEntry.day + 1;
+                }
+
+                setState({
+                    ...INITIAL_STATE,
+                    history,
+                    currentDay: Math.min(nextDay, 21) // Cap at 21 per logic
+                });
+            }
+        } catch (error) {
+            console.error('Failed to fetch progress:', error);
+        } finally {
+            setIsLoaded(true);
+        }
     };
 
     const getDifficulty = (day: number): Difficulty => {
@@ -44,25 +56,32 @@ export function useSchedule() {
         return SCHEDULE_CONFIG.hard.duration;
     };
 
-    const completeDay = (result: Omit<DailyProgress, 'day' | 'date' | 'completed'>) => {
-        const newHistory = [
-            ...state.history,
-            {
+    const completeDay = async (result: Omit<DailyProgress, 'day' | 'date' | 'completed'>) => {
+        try {
+            const payload = {
                 ...result,
                 day: state.currentDay,
                 date: new Date().toISOString(),
                 completed: true,
-            },
-        ];
+            };
 
-        const nextDay = Math.min(state.currentDay + 1, 21); // Cap at 21 for now, or loop?
-        // Actually, user might want to continue practicing. Let's cap at 21 for the "Challenge" but allow free practice later.
+            const res = await fetch('/api/progress', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
 
-        saveState({
-            ...state,
-            history: newHistory,
-            currentDay: nextDay,
-        });
+            if (res.ok) {
+                const savedEntry = await res.json();
+                setState(prev => ({
+                    ...prev,
+                    history: [...prev.history, savedEntry],
+                    currentDay: Math.min(prev.currentDay + 1, 21)
+                }));
+            }
+        } catch (error) {
+            console.error('Failed to save progress:', error);
+        }
     };
 
     return {

@@ -30,7 +30,10 @@ export default function Recorder({ targetDuration, onComplete, onBack }: Recorde
 
     const startStream = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 480 }, height: { ideal: 360 } },
+                audio: true
+            });
             streamRef.current = stream;
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;

@@ -19,20 +19,33 @@ export default function Home() {
   const handleRecordingComplete = async (blob: Blob) => {
     setStep('ANALYZING');
     try {
+      // 1. Upload Video
+      const formData = new FormData();
+      formData.append('file', blob);
+
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!uploadRes.ok) throw new Error('Upload failed');
+      const { url: videoPath } = await uploadRes.json();
+
+      // 2. Analyze
       const result = await analyzeSpeech(blob, currentTopic);
       setAnalysisResult(result);
 
-      // Save progress
-      completeDay({
+      // 3. Save Progress
+      await completeDay({
         score: result.score,
         transcript: result.transcript,
         topic: currentTopic,
+        videoPath: videoPath
       });
 
       setStep('RESULTS');
     } catch (error) {
-      console.error('Analysis failed', error);
-      // Handle error (could add an error state)
+      console.error('Process failed', error);
       setStep('DASHBOARD');
     }
   };
